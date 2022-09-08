@@ -65,7 +65,7 @@ static void drawState(GameState* state)
     mvprintw(state->apple.y, state->apple.x, "🍎");
 }
 
-bool snakeContains(Snake* snake, Position p)
+static bool snakeContains(Snake* snake, Position p)
 {
     for (int i = 0; i < snake->size; i++) {
         if ((snake->path[i].x == p.x
@@ -77,7 +77,7 @@ bool snakeContains(Snake* snake, Position p)
     return false;
 }
 
-void genApple(GameState* state)
+static void genApple(GameState* state)
 {
     state->apple = (Position) { rand() % state->width, rand() % (state->height + 1) };
     while (snakeContains(&state->snake, state->apple)) {
@@ -85,7 +85,7 @@ void genApple(GameState* state)
     }
 }
 
-void updateState(GameState* state)
+static void updateState(GameState* state)
 {
     if (state->snake.stock > 0) {
         Position* new = malloc((state->snake.size + 1) * sizeof(Position));
@@ -134,6 +134,7 @@ void updateState(GameState* state)
     state->snake.size--;
     if (snakeContains(&state->snake, head)) {
         endwin();
+        usleep(10000);
         printf("YOU LOSE!\n");
         exit(EXIT_SUCCESS);
     }
@@ -146,7 +147,7 @@ void updateState(GameState* state)
     }
 }
 
-long micros()
+static long micros()
 {
     struct timeval t;
     gettimeofday(&t, NULL);
