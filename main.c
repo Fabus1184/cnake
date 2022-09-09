@@ -1,17 +1,14 @@
 #include <locale.h>
-#include <math.h>
 #include <memory.h>
 #include <ncurses.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/ioctl.h>
 #include <sys/time.h>
-#include <unistd.h>
 
 #define FIELD_COLS 6
 #define FIELD_ROWS 14
 #define FIELD_SIZE FIELD_COLS * FIELD_ROWS
+#define SNAKE_INITIAL_SIZE 5
 
 typedef enum Direction {
     UP,
@@ -26,7 +23,7 @@ typedef struct Position {
 } Position;
 
 typedef struct Snake {
-    Position* path;
+    Position *path;
     int size;
     Direction direction;
     int stock;
@@ -38,22 +35,37 @@ typedef struct GameState {
     Position apple;
 } GameState;
 
-static void drawState(GameState* state)
-{
+void exitCnake(int exitCode, char *format,  ...) {
+    endwin();
+    while (!isendwin());
+    if (format) {
+        va_list ap;
+        va_start(ap, format);
+        vprintf(format, ap);
+    }
+    exit(exitCode);
+}
+
+static void drawState(GameState *state) {
+    // print score
+    attron(A_BOLD);
+    mvprintw(0, 0, "Score: %d", state->snake.size - SNAKE_INITIAL_SIZE);
+    attroff(A_BOLD);
+
     // print head
     switch (state->snake.direction) {
-    case UP:
-        mvprintw(state->snake.path[0].y, state->snake.path[0].x, "🔼");
-        break;
-    case DOWN:
-        mvprintw(state->snake.path[0].y, state->snake.path[0].x, "🔽");
-        break;
-    case LEFT:
-        mvprintw(state->snake.path[0].y, state->snake.path[0].x, "◀️ ");
-        break;
-    case RIGHT:
-        mvprintw(state->snake.path[0].y, state->snake.path[0].x, "▶️ ");
-        break;
+        case UP:
+            mvprintw(state->snake.path[0].y, state->snake.path[0].x, "🔼");
+            break;
+        case DOWN:
+            mvprintw(state->snake.path[0].y, state->snake.path[0].x, "🔽");
+            break;
+        case LEFT:
+            mvprintw(state->snake.path[0].y, state->snake.path[0].x, "◀️ ");
+            break;
+        case RIGHT:
+            mvprintw(state->snake.path[0].y, state->snake.path[0].x, "▶️ ");
+            break;
     }
 
     // print body
@@ -65,30 +77,33 @@ static void drawState(GameState* state)
     mvprintw(state->apple.y, state->apple.x, "🍎");
 }
 
-static bool snakeContains(Snake* snake, Position p)
-{
+static bool snakeContains(Snake *snake, Position p) {
+    // test if snake path contains position
     for (int i = 0; i < snake->size; i++) {
         if ((snake->path[i].x == p.x
-                || snake->path[i].x + 1 == p.x
-                || snake->path[i].x - 1 == p.x)
+             || snake->path[i].x + 1 == p.x
+             || snake->path[i].x - 1 == p.x)
             && snake->path[i].y == p.y)
             return true;
     }
     return false;
 }
 
-static void genApple(GameState* state)
-{
-    state->apple = (Position) { rand() % state->width, rand() % (state->height + 1) };
+static void genApple(GameState *state) {
+    // generate random apple not inside the snake
+    state->apple = (Position) {rand() % state->width, rand() % (state->height + 1)};
     while (snakeContains(&state->snake, state->apple)) {
-        state->apple = (Position) { rand() % state->width, rand() % (state->height + 1) };
+        state->apple = (Position) {rand() % state->width, rand() % (state->height + 1)};
     }
 }
 
-static void updateState(GameState* state)
-{
+static void updateState(GameState *state) {
+
+    // extend snake
     if (state->snake.stock > 0) {
-        Position* new = malloc((state->snake.size + 1) * sizeof(Position));
+        // new path array
+        Position *new = malloc((state->snake.size + 1) * sizeof(Position));
+        // copy old path (last element still uninitialized)
         memcpy(new, state->snake.path, (state->snake.size) * sizeof(Position));
         free(state->snake.path);
         state->snake.path = new;
@@ -96,127 +111,133 @@ static void updateState(GameState* state)
         state->snake.stock--;
     }
 
+    // shift left, overwriting last
     memmove(state->snake.path + 1, state->snake.path, (state->snake.size - 1) * sizeof(Position));
 
+    // move head
     switch (state->snake.direction) {
-    case UP:
-        state->snake.path[0].y--;
-        break;
-    case DOWN:
-        state->snake.path[0].y++;
-        break;
-    case LEFT:
-        state->snake.path[0].x -= 2;
-        break;
-    case RIGHT:
-        state->snake.path[0].x += 2;
-        break;
+        case UP:
+            state->snake.path[0].y--;
+            break;
+        case DOWN:
+            state->snake.path[0].y++;
+            break;
+        case LEFT:
+            state->snake.path[0].x -= 2;
+            break;
+        case RIGHT:
+            state->snake.path[0].x += 2;
+            break;
     }
 
-    if (state->snake.path[0].x < 0) {
-        state->snake.path[0].x = state->width;
+    // wrap around window borders
+    {
+        if (state->snake.path[0].x < 0) {
+            state->snake.path[0].x = state->width;
+        }
+
+        if (state->snake.path[0].y < 0) {
+            state->snake.path[0].y = state->height;
+        }
+
+        if (state->snake.path[0].x > state->width) {
+            state->snake.path[0].x = 0;
+        }
+
+        if (state->snake.path[0].y > state->height) {
+            state->snake.path[0].y = 0;
+        }
     }
 
-    if (state->snake.path[0].y < 0) {
-        state->snake.path[0].y = state->height;
+    // check if snake collides with itself
+    {
+        Position head = state->snake.path[0];
+        state->snake.path++;
+        state->snake.size--;
+
+        if (snakeContains(&state->snake, head)) {
+            exitCnake(EXIT_SUCCESS, "YOU LOSE!\nScore: %d\n", state->snake.size - SNAKE_INITIAL_SIZE);
+        }
+
+        state->snake.path--;
+        state->snake.size++;
     }
 
-    if (state->snake.path[0].x > state->width) {
-        state->snake.path[0].x = 0;
-    }
-
-    if (state->snake.path[0].y > state->height) {
-        state->snake.path[0].y = 0;
-    }
-
-    Position head = state->snake.path[0];
-    state->snake.path++;
-    state->snake.size--;
-    if (snakeContains(&state->snake, head)) {
-        endwin();
-        usleep(10000);
-        printf("YOU LOSE!\n");
-        exit(EXIT_SUCCESS);
-    }
-    state->snake.path--;
-    state->snake.size++;
-
+    // check if snake contains apple
     if (snakeContains(&state->snake, state->apple)) {
         genApple(state);
         state->snake.stock++;
     }
 }
 
-static long micros()
-{
+// get time in microseconds
+static long micros() {
     struct timeval t;
     gettimeofday(&t, NULL);
-    return t.tv_sec * (int)1e6 + t.tv_usec;
+    return t.tv_sec * (int) 1e6 + t.tv_usec;
 }
 
-int main()
-{
+int main() {
     // initialize rng
-    srand((unsigned int)micros());
+    srand((unsigned int) micros());
 
     // curses init
     setlocale(LC_ALL, "");
-    atexit((void (*)(void))endwin);
+    atexit((void (*)(void)) endwin);
     initscr();
-    if (nodelay(stdscr, true) == ERR) {
-        endwin();
-        printf("Error unblocking getch\n");
-        exit(EXIT_FAILURE);
-    }
+    start_color();
+    use_default_colors();
     noecho();
     curs_set(false);
+    if (nodelay(stdscr, true) == ERR) {
+        exitCnake(EXIT_FAILURE, "Error unblocking getch()\n");
+    }
 
     // get dimensions
     int x, y;
     getmaxyx(stdscr, y, x);
-    x -= 2;
+    x -= 2; // emojis are 2 wide characters
     y--;
 
     // init game state
-    bool field[FIELD_SIZE];
-    memset(field, (int)true, FIELD_SIZE);
-
-    Position snakePath[5];
-    for (int i = 0; i < 5; i++) {
-        snakePath[i] = (Position) { x / 2 + (2 * i), y / 2 };
+    Position *snakePath = malloc(SNAKE_INITIAL_SIZE * sizeof (Position));
+    for (int i = 0; i < SNAKE_INITIAL_SIZE; i++) {
+        snakePath[i] = (Position) {x / 2 + (2 * i), y / 2};
     }
-    Snake snake = { snakePath, 5, LEFT, 0 };
-    GameState state = { snake, x, y, { 0, 0 } };
+    Snake snake = {snakePath, SNAKE_INITIAL_SIZE, LEFT, 0};
+    GameState state = {snake, x, y, {0, 0}};
     genApple(&state);
 
-    long time = micros();
-
     // game loop
-    while (true) {
+    long time = micros();
+    while (!isendwin()) {
+        // get input (non blocking)
         int c = getch();
         if (c != ERR) {
             switch (c) {
-            case 'w':
-                state.snake.direction = UP;
-                break;
-            case 'a':
-                state.snake.direction = LEFT;
-                break;
-            case 's':
-                state.snake.direction = DOWN;
-                break;
-            case 'd':
-                state.snake.direction = RIGHT;
-                break;
-            case 'q':
-                exit(EXIT_SUCCESS);
-            default:
-                break;
+                case 'w':
+                    state.snake.direction = UP;
+                    break;
+                case 'a':
+                    state.snake.direction = LEFT;
+                    break;
+                case 's':
+                    state.snake.direction = DOWN;
+                    break;
+                case 'd':
+                    state.snake.direction = RIGHT;
+                    break;
+                case 'q':
+                    exitCnake(EXIT_SUCCESS, NULL);
+                default:
+                    break;
             }
         }
 
+        // update & redraw game every 100 ms
         if (micros() - time >= 100 * 1000) {
             updateState(&state);
+
             clear();
             drawState(&state);
             refresh();
