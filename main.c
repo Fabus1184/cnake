@@ -38,7 +38,7 @@ typedef struct GameState {
 
 void exitCnake(char *format, int exitCode, ...) {
     endwin();
-    while (!isendwin());
+    while (!isendwin()) {}
     usleep(250 * 1000);
     if (format) {
         va_list ap;
@@ -104,11 +104,7 @@ static void updateState(GameState *state) {
     // extend snake
     if (state->snake.stock > 0) {
         // new path array
-        Position *new = malloc((state->snake.size + 1) * sizeof(Position));
-        // copy old path (last element still uninitialized)
-        memcpy(new, state->snake.path, (state->snake.size) * sizeof(Position));
-        free(state->snake.path);
-        state->snake.path = new;
+        state->snake.path = reallocarray(state->snake.path, state->snake.size + 1, sizeof(Position));        
         state->snake.size++;
         state->snake.stock--;
     }
@@ -185,7 +181,6 @@ int main() {
 
     // curses init
     setlocale(LC_ALL, "");
-    atexit((void (*)(void)) endwin);
     initscr();
     start_color();
     use_default_colors();
@@ -218,19 +213,27 @@ int main() {
         if (c != ERR) {
             switch (c) {
                 case 'w':
-                    state.snake.direction = UP;
+                    if (state.snake.direction != DOWN) {
+                        state.snake.direction = UP;
+                    }
                     break;
                 case 'a':
-                    state.snake.direction = LEFT;
+                    if (state.snake.direction != RIGHT) {
+                        state.snake.direction = LEFT;
+                    }
                     break;
                 case 's':
-                    state.snake.direction = DOWN;
+                    if (state.snake.direction != UP) {
+                        state.snake.direction = DOWN;
+                    }
                     break;
                 case 'd':
-                    state.snake.direction = RIGHT;
+                    if (state.snake.direction != LEFT) {
+                        state.snake.direction = RIGHT;
+                    }
                     break;
                 case 'q':
-                    exitCnake("YOU LOSE!\nScore: %d\n", EXIT_SUCCESS, state.snake.size - SNAKE_INITIAL_SIZE);
+                    exitCnake("Score: %d\n", EXIT_SUCCESS, state.snake.size - SNAKE_INITIAL_SIZE);
                 default:
                     break;
             }
