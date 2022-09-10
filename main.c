@@ -3,6 +3,7 @@
 #include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/time.h>
 
 #define FIELD_COLS 6
@@ -35,12 +36,13 @@ typedef struct GameState {
     Position apple;
 } GameState;
 
-void exitCnake(int exitCode, char *format,  ...) {
+void exitCnake(char *format, int exitCode, ...) {
     endwin();
     while (!isendwin());
+    usleep(250 * 1000);
     if (format) {
         va_list ap;
-        va_start(ap, format);
+        va_start(ap, exitCode);
         vprintf(format, ap);
     }
     exit(exitCode);
@@ -156,7 +158,7 @@ static void updateState(GameState *state) {
         state->snake.size--;
 
         if (snakeContains(&state->snake, head)) {
-            exitCnake(EXIT_SUCCESS, "YOU LOSE!\nScore: %d\n", state->snake.size - SNAKE_INITIAL_SIZE);
+            exitCnake("YOU LOSE!\nScore: %d\n", EXIT_SUCCESS, ++state->snake.size - SNAKE_INITIAL_SIZE);
         }
 
         state->snake.path--;
@@ -190,7 +192,7 @@ int main() {
     noecho();
     curs_set(false);
     if (nodelay(stdscr, true) == ERR) {
-        exitCnake(EXIT_FAILURE, "Error unblocking getch()\n");
+        exitCnake("Error unblocking getch()\n", EXIT_FAILURE);
     }
 
     // get dimensions
@@ -228,7 +230,7 @@ int main() {
                     state.snake.direction = RIGHT;
                     break;
                 case 'q':
-                    exitCnake(EXIT_SUCCESS, NULL);
+                    exitCnake("YOU LOSE!\nScore: %d\n", EXIT_SUCCESS, state.snake.size - SNAKE_INITIAL_SIZE);
                 default:
                     break;
             }
