@@ -8,7 +8,7 @@ run: main
 	./main
 
 main: main.c
-	$(CC) $(LIBS) $(ARGS) $? -o $@
+	$(CC) $? $(LIBS) $(ARGS) -o $@
 
 clean:
 	rm main
